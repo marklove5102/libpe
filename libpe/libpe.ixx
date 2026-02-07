@@ -139,7 +139,13 @@ export namespace libpe {
 	//Data directories.
 	struct PEDATADIR {
 		IMAGE_DATA_DIRECTORY stDataDir { }; //Standard header.
-		std::string          strSection;    //Name of the section this directory resides in (points to).
+
+		//Section index number, in which this directory resides.
+		//This index is also the actual index into the PESECHDR_VEC vector (from GetSecHeaders()).
+		//If the IMAGE_DATA_DIRECTORY::VirtualAddress is > 0 and this index equals 0xFFFFFFFF (DWORD max),
+		//it means that directory's VirtualAddress points to an invalid/nonexistent section,
+		//and the PE file is most likely corrupted.
+		DWORD                dwSecIdx { };
 	};
 	using PEDATADIR_VEC = std::vector<PEDATADIR>;
 
@@ -675,38 +681,39 @@ export namespace libpe {
 		auto OpenFile(const wchar_t* pwszFile) -> int;
 		auto OpenFile(std::span<const std::byte> spnData) -> int;
 		void CloseFile();
-		[[nodiscard]] auto GetDOSHeader()const->std::optional<IMAGE_DOS_HEADER>;
-		[[nodiscard]] auto GetRichHeader()const->std::optional<PERICHHDR_VEC>;
-		[[nodiscard]] auto GetNTHeader()const->std::optional<PENTHDR>;
-		[[nodiscard]] auto GetDataDirs()const->std::optional<PEDATADIR_VEC>;
-		[[nodiscard]] auto GetSecHeaders()const->std::optional<PESECHDR_VEC>;
-		[[nodiscard]] auto GetExport()const->std::optional<PEEXPORT>;
-		[[nodiscard]] auto GetImport()const->std::optional<PEIMPORT_VEC>;
-		[[nodiscard]] auto GetResources()const->std::optional<PERESROOT>;
-		[[nodiscard]] auto GetExceptions()const->std::optional<PEEXCEPTION_VEC>;
-		[[nodiscard]] auto GetSecurity()const->std::optional<PESECURITY_VEC>;
-		[[nodiscard]] auto GetRelocations()const->std::optional<PERELOC_VEC>;
-		[[nodiscard]] auto GetDebug()const->std::optional<PEDEBUG_VEC>;
-		[[nodiscard]] auto GetTLS()const->std::optional<PETLS>;
-		[[nodiscard]] auto GetLoadConfig()const->std::optional<PELOADCONFIG>;
-		[[nodiscard]] auto GetBoundImport()const->std::optional<PEBOUNDIMPORT_VEC>;
-		[[nodiscard]] auto GetDelayImport()const->std::optional<PEDELAYIMPORT_VEC>;
-		[[nodiscard]] auto GetCOMDescriptor()const->std::optional<PECOMDESCRIPTOR>;
+		[[nodiscard]] auto GetDOSHeader()const -> std::optional<IMAGE_DOS_HEADER>;
+		[[nodiscard]] auto GetRichHeader()const -> std::optional<PERICHHDR_VEC>;
+		[[nodiscard]] auto GetNTHeader()const -> std::optional<PENTHDR>;
+		[[nodiscard]] auto GetDataDirs()const -> std::optional<PEDATADIR_VEC>;
+		[[nodiscard]] auto GetSecHeaders()const -> std::optional<PESECHDR_VEC>;
+		[[nodiscard]] auto GetExport()const -> std::optional<PEEXPORT>;
+		[[nodiscard]] auto GetImport()const -> std::optional<PEIMPORT_VEC>;
+		[[nodiscard]] auto GetResources()const -> std::optional<PERESROOT>;
+		[[nodiscard]] auto GetExceptions()const -> std::optional<PEEXCEPTION_VEC>;
+		[[nodiscard]] auto GetSecurity()const -> std::optional<PESECURITY_VEC>;
+		[[nodiscard]] auto GetRelocations()const -> std::optional<PERELOC_VEC>;
+		[[nodiscard]] auto GetDebug()const -> std::optional<PEDEBUG_VEC>;
+		[[nodiscard]] auto GetTLS()const -> std::optional<PETLS>;
+		[[nodiscard]] auto GetLoadConfig()const -> std::optional<PELOADCONFIG>;
+		[[nodiscard]] auto GetBoundImport()const -> std::optional<PEBOUNDIMPORT_VEC>;
+		[[nodiscard]] auto GetDelayImport()const -> std::optional<PEDELAYIMPORT_VEC>;
+		[[nodiscard]] auto GetCOMDescriptor()const -> std::optional<PECOMDESCRIPTOR>;
 	private:
-		[[nodiscard]] auto GetFileSize()const->ULONGLONG;
-		[[nodiscard]] auto GetBaseAddr()const->DWORD_PTR;
-		[[nodiscard]] auto GetDosPtr()const->const IMAGE_DOS_HEADER*;
-		[[nodiscard]] auto GetDirEntryRVA(DWORD dwEntry)const->DWORD;
-		[[nodiscard]] auto GetDirEntrySize(DWORD dwEntry)const->DWORD;
-		[[nodiscard]] auto GetImageBase()const->ULONGLONG;
-		[[nodiscard]] auto GetSecHdrFromName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER;
-		[[nodiscard]] auto GetSecHdrFromRVA(ULONGLONG ullRVA)const->PIMAGE_SECTION_HEADER;
+		[[nodiscard]] auto GetFileSize()const -> ULONGLONG;
+		[[nodiscard]] auto GetBaseAddr()const -> DWORD_PTR;
+		[[nodiscard]] auto GetDosPtr()const -> const IMAGE_DOS_HEADER*;
+		[[nodiscard]] auto GetDirEntryRVA(DWORD dwEntry)const -> DWORD;
+		[[nodiscard]] auto GetDirEntrySize(DWORD dwEntry)const -> DWORD;
+		[[nodiscard]] auto GetImageBase()const -> ULONGLONG;
+		[[nodiscard]] auto GetSecHdrFromShortName(LPCSTR lpszName)const -> PIMAGE_SECTION_HEADER;
+		[[nodiscard]] auto GetSecHdrFromRVA(ULONGLONG ullRVA)const -> PIMAGE_SECTION_HEADER;
+		[[nodiscard]] auto GetSecIdxFromRVA(ULONGLONG ullRVA)const -> std::optional<DWORD>;
 		template<typename T>
-		[[nodiscard]] auto GetTData(ULONGLONG ullOffset)const->T;
+		[[nodiscard]] auto GetTData(ULONGLONG ullOffset)const -> T;
 		template<typename T>
-		[[nodiscard]] auto IsPtrSafe(T tAddr, bool fCanReferenceBoundary = false)const->bool;
-		[[nodiscard]] auto PtrToOffset(LPCVOID lp)const->DWORD;
-		[[nodiscard]] auto RVAToPtr(ULONGLONG ullRVA)const->LPVOID;
+		[[nodiscard]] auto IsPtrSafe(T tAddr, bool fCanReferenceBoundary = false)const -> bool;
+		[[nodiscard]] auto PtrToOffset(LPCVOID lp)const -> DWORD;
+		[[nodiscard]] auto RVAToPtr(ULONGLONG ullRVA)const -> LPVOID;
 		bool ParseDOSHeader();
 		bool ParseNTFileOptHeader();
 	private:
@@ -739,29 +746,29 @@ export namespace libpe {
 			CloseFile();
 		}
 
-		m_hFile = CreateFileW(pwszFile, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		m_hFile = ::CreateFileW(pwszFile, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 		assert(m_hFile != INVALID_HANDLE_VALUE);
 		if (m_hFile == INVALID_HANDLE_VALUE)
 			return ERR_FILE_OPEN;
 
 		LARGE_INTEGER stLI { };
-		if (GetFileSizeEx(m_hFile, &stLI) == FALSE || stLI.QuadPart < sizeof(IMAGE_DOS_HEADER)) {
-			CloseHandle(m_hFile);
+		if (::GetFileSizeEx(m_hFile, &stLI) == FALSE || stLI.QuadPart < sizeof(IMAGE_DOS_HEADER)) {
+			::CloseHandle(m_hFile);
 			return ERR_FILE_SIZESMALL;
 		}
 
-		m_hFileMap = CreateFileMappingW(m_hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+		m_hFileMap = ::CreateFileMappingW(m_hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
 		assert(m_hFileMap != nullptr);
 		if (m_hFileMap == nullptr) {
-			CloseHandle(m_hFile);
+			::CloseHandle(m_hFile);
 			return ERR_FILE_MAPPING;
 		}
 
-		m_pFileView = MapViewOfFile(m_hFileMap, FILE_MAP_READ, 0, 0, 0);
+		m_pFileView = ::MapViewOfFile(m_hFileMap, FILE_MAP_READ, 0, 0, 0);
 		assert(m_pFileView != nullptr); //Not enough memory? File is too big?
 		if (m_pFileView == nullptr) {
-			CloseHandle(m_hFileMap);
-			CloseHandle(m_hFile);
+			::CloseHandle(m_hFileMap);
+			::CloseHandle(m_hFile);
 			return ERR_FILE_MAPPING;
 		}
 
@@ -796,9 +803,9 @@ export namespace libpe {
 	void Clibpe::CloseFile()
 	{
 		if (m_fFileHandle) {
-			UnmapViewOfFile(m_pFileView);
-			CloseHandle(m_hFileMap);
-			CloseHandle(m_hFile);
+			::UnmapViewOfFile(m_pFileView);
+			::CloseHandle(m_hFileMap);
+			::CloseHandle(m_hFile);
 		}
 		m_hFile = nullptr;
 		m_hFileMap = nullptr;
@@ -914,13 +921,13 @@ export namespace libpe {
 		}
 
 		PEDATADIR_VEC vecDataDirs;
-		for (auto iDir = 0UL; iDir < (dwRVAAndSizes > 15 ? 15 : dwRVAAndSizes); ++iDir, ++pDataDir) {
-			std::string strSecName;
-			if (const auto pSecHdr = GetSecHdrFromRVA(pDataDir->VirtualAddress);
-				pSecHdr != nullptr && iDir != IMAGE_DIRECTORY_ENTRY_SECURITY) { //RVA of IMAGE_DIRECTORY_ENTRY_SECURITY is the file RAW offset.
-				strSecName.assign(reinterpret_cast<char* const>(pSecHdr->Name), 8);
+		for (DWORD itDir = IMAGE_DIRECTORY_ENTRY_EXPORT; itDir < (dwRVAAndSizes > 15 ? 15 : dwRVAAndSizes); ++itDir, ++pDataDir) {
+			DWORD dwSecIndex { };
+			if (itDir != IMAGE_DIRECTORY_ENTRY_SECURITY) { //RVA of the IMAGE_DIRECTORY_ENTRY_SECURITY is a file RAW offset.
+				dwSecIndex = GetSecIdxFromRVA(pDataDir->VirtualAddress).value_or(0xFFFFFFFFUL);
 			}
-			vecDataDirs.emplace_back(*pDataDir, std::move(strSecName));
+
+			vecDataDirs.emplace_back(*pDataDir, dwSecIndex);
 		}
 
 		return vecDataDirs.empty() ? std::nullopt : std::optional<PEDATADIR_VEC>(std::move(vecDataDirs));
@@ -957,13 +964,13 @@ export namespace libpe {
 		PESECHDR_VEC vecSecHeaders;
 		vecSecHeaders.reserve(wNumSections);
 
-		for (auto i = 0UL; i < wNumSections; ++i, ++pSecHdr) {
+		for (auto itSec = 0UL; itSec < wNumSections; ++itSec, ++pSecHdr) {
 			if (!IsPtrSafe(reinterpret_cast<DWORD_PTR>(pSecHdr) + sizeof(IMAGE_SECTION_HEADER)))
 				break;
 
 			std::string strSecRealName;
 			if (pSecHdr->Name[0] == '/') {
-				//Deprecated, but still used "feature" of section name.
+				//Deprecated, but still used "feature" of a section name.
 				//«An 8-byte, null-padded UTF-8 string. There is no terminating null character 
 				//if the string is exactly eight characters long.
 				//For longer names, this member contains a forward slash (/) followed by an ASCII 
@@ -977,9 +984,10 @@ export namespace libpe {
 				const auto pStart = reinterpret_cast<const char*>(&pSecHdr->Name[1]);
 				char* pEnd { };
 				errno = 0;
-				const auto lOffset = strtol(pStart, &pEnd, 10);
-				if (pEnd == pStart || errno == ERANGE)
+				const auto lOffset = ::strtol(pStart, &pEnd, 10);
+				if (pEnd == pStart || errno == ERANGE) {
 					continue; //Going next section entry.
+				}
 
 				const auto lpszSecRealName = reinterpret_cast<const char*>(GetBaseAddr()
 					+ static_cast<DWORD_PTR>(dwSymbolTable) + (static_cast<DWORD_PTR>(dwNumberOfSymbols) * 18)
@@ -1550,7 +1558,7 @@ export namespace libpe {
 
 		PIMAGE_DEBUG_DIRECTORY pDebugDir;
 		DWORD dwDebugDirSize;
-		auto pDebugSecHdr = GetSecHdrFromName(".debug");
+		auto pDebugSecHdr = GetSecHdrFromShortName(".debug");
 		if (pDebugSecHdr && (pDebugSecHdr->VirtualAddress == dwDebugDirRVA)) {
 			pDebugDir = reinterpret_cast<PIMAGE_DEBUG_DIRECTORY>(GetBaseAddr() + static_cast<DWORD_PTR>(pDebugSecHdr->PointerToRawData));
 			dwDebugDirSize = GetDirEntrySize(IMAGE_DIRECTORY_ENTRY_DEBUG) * static_cast<DWORD>(sizeof(IMAGE_DEBUG_DIRECTORY));
@@ -1971,7 +1979,7 @@ export namespace libpe {
 		}
 	}
 
-	auto Clibpe::GetSecHdrFromName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER
+	auto Clibpe::GetSecHdrFromShortName(LPCSTR lpszName)const->PIMAGE_SECTION_HEADER
 	{
 		if (!m_fHasNTHdr)
 			return nullptr;
@@ -1992,10 +2000,11 @@ export namespace libpe {
 			return nullptr;
 		}
 
-		for (auto i = 0UL; i < wNumberOfSections; ++i, ++pSecHdr) {
+		for (auto itSec = 0UL; itSec < wNumberOfSections; ++itSec, ++pSecHdr) {
 			if (!IsPtrSafe(reinterpret_cast<DWORD_PTR>(pSecHdr) + sizeof(IMAGE_SECTION_HEADER)))
 				break;
-			if (strncmp(reinterpret_cast<char*>(pSecHdr->Name), lpszName, IMAGE_SIZEOF_SHORT_NAME) == 0)
+
+			if (::strncmp(reinterpret_cast<const char*>(pSecHdr->Name), lpszName, IMAGE_SIZEOF_SHORT_NAME) == 0)
 				return pSecHdr;
 		}
 
@@ -2023,7 +2032,7 @@ export namespace libpe {
 			return nullptr;
 		}
 
-		for (auto i = 0UL; i < wNumberOfSections; ++i, ++pSecHdr) {
+		for (auto itSec = 0UL; itSec < wNumberOfSections; ++itSec, ++pSecHdr) {
 			if (!IsPtrSafe(reinterpret_cast<DWORD_PTR>(pSecHdr) + sizeof(IMAGE_SECTION_HEADER)))
 				return nullptr;
 
@@ -2034,6 +2043,41 @@ export namespace libpe {
 		}
 
 		return nullptr;
+	}
+
+	auto Clibpe::GetSecIdxFromRVA(ULONGLONG ullRVA)const->std::optional<DWORD>
+	{
+		if (!m_fHasNTHdr)
+			return std::nullopt;
+
+		PIMAGE_SECTION_HEADER pSecHdr;
+		WORD wNumberOfSections;
+
+		switch (m_ePEType) {
+		case EFileType::PE32:
+			pSecHdr = IMAGE_FIRST_SECTION(m_pNTHeader32);
+			wNumberOfSections = m_pNTHeader32->FileHeader.NumberOfSections;
+			break;
+		case EFileType::PE64:
+			pSecHdr = IMAGE_FIRST_SECTION(m_pNTHeader64);
+			wNumberOfSections = m_pNTHeader64->FileHeader.NumberOfSections;
+			break;
+		default:
+			return std::nullopt;
+		}
+
+		for (auto itSec = 0UL; itSec < wNumberOfSections; ++itSec, ++pSecHdr) {
+			if (!IsPtrSafe(reinterpret_cast<DWORD_PTR>(pSecHdr) + sizeof(IMAGE_SECTION_HEADER))) {
+				return std::nullopt;
+			}
+
+			//Is RVA within this section?
+			if ((ullRVA >= pSecHdr->VirtualAddress) && (ullRVA < (pSecHdr->VirtualAddress + pSecHdr->Misc.VirtualSize))) {
+				return itSec; //Section sequential index in a PE file.
+			}
+		}
+
+		return std::nullopt;
 	}
 
 	template<typename T>
